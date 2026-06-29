@@ -413,7 +413,7 @@ function WebsiteMode({ onSwitchToAdmin }: { onSwitchToAdmin: () => void }) {
               <div key={svc.name} onClick={() => setBookingOpen(true)} className="group bg-zinc-900 border border-gray-800 hover:border-yellow-600 transition-all duration-300 overflow-hidden cursor-pointer rounded-xl">
                 <div className="relative h-48 overflow-hidden bg-zinc-800">
                   <ImageWithFallback src={svc.img} alt={svc.name} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" />
-                  <div className="absolute inset-0 bg-gradient-to-t from-black via-black/50 to-transparent" />
+                  <div className="absolute inset-3 bg-gradient-to-t  via-black/20 to-transparent" />
                   <div className="absolute top-4 right-4"><div className="p-2 rounded-full" style={{ background: GOLD }}><Scissors className="w-4 h-4 text-black" /></div></div>
                 </div>
                 <div className="p-5">
