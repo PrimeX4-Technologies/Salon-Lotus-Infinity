@@ -72,7 +72,7 @@ const TIME_SLOTS = [
 ];
 
 interface BookingState {
-  service: typeof WEB_SERVICES[0] | null;
+  services: typeof WEB_SERVICES;
   date: Date | null;
   time: string | null;
   name: string; mobile: string; notes: string;
@@ -100,11 +100,16 @@ function BookingModal({ onClose }: { onClose: () => void }) {
   const [step, setStep] = useState(0);
   const [confirmed, setConfirmed] = useState(false);
   const [attempted, setAttempted] = useState<string | null>(null);
-  const [booking, setBooking] = useState<BookingState>({ service: null, date: null, time: null, name: "", mobile: "", notes: "" });
+  const [booking, setBooking] = useState<BookingState>({ services: [], date: null, time: null, name: "", mobile: "", notes: "" });
   const [calYear, setCalYear] = useState(2026);
   const [calMonth, setCalMonth] = useState(5);
 
-  const canNext = [!!booking.service, !!booking.date, !!booking.time, booking.name.trim().length > 1 && booking.mobile.trim().length > 6, true][step];
+  const totalPrice = booking.services.reduce((s, v) => s + v.price, 0);
+  const totalAdvance = booking.services.reduce((s, v) => s + v.advance, 0);
+  const totalDuration = booking.services.reduce((s, v) => s + parseInt(v.duration), 0) || booking.services.map(s => s.duration).join(" + ");
+  const totalDurationLabel = booking.services.map(s => s.duration).join(" + ");
+
+  const canNext = [booking.services.length > 0, !!booking.date, !!booking.time, booking.name.trim().length > 1 && /^\d{10}$/.test(booking.mobile.trim()), true][step];
 
   const getSuggestions = (t: string) => {
     const idx = TIME_SLOTS.findIndex(s => s.time === t);
@@ -122,7 +127,7 @@ function BookingModal({ onClose }: { onClose: () => void }) {
   const cells = Array.from({ length: firstDay }, () => null).concat(Array.from({ length: daysInMonth }, (_, i) => i + 1));
   const toDateKey = (d: number) => `${calYear}-${String(calMonth + 1).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
 
-  if (confirmed && booking.service) {
+  if (confirmed && booking.services.length > 0) {
     return (
       <ModalShell onClose={onClose}>
         <div className="flex flex-col items-center text-center py-6 space-y-4">
@@ -130,7 +135,7 @@ function BookingModal({ onClose }: { onClose: () => void }) {
             <CheckCircle2 className="w-10 h-10 text-green-400" />
           </div>
           <h3 className="text-2xl font-semibold text-white" style={{ fontFamily: "'Playfair Display', serif" }}>Confirmed!</h3>
-          <p className="text-zinc-400 text-sm max-w-xs">Your <span className="text-white font-semibold">{booking.service.name}</span> appointment is confirmed. We'll send a reminder before your visit.</p>
+          <p className="text-zinc-400 text-sm max-w-xs">Your <span className="text-white font-semibold">{booking.services.map(s => s.name).join(", ")}</span> appointment is confirmed. We'll send a reminder before your visit.</p>
           <div className="rounded-xl px-5 py-3 text-sm" style={{ background: "#141414", border: `1px solid ${BORDER}` }}>
             <p className="font-semibold" style={{ color: GOLD }}>{booking.date?.toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" })}</p>
             <p className="text-zinc-400">{booking.time}</p>
@@ -156,19 +161,21 @@ function BookingModal({ onClose }: { onClose: () => void }) {
         <h3 className="text-lg font-semibold text-white" style={{ fontFamily: "'Playfair Display', serif" }}>
           {["Choose Your Service","Pick a Date","Select a Time","Your Details","Review & Confirm"][step]}
         </h3>
-        <p className="text-zinc-500 text-xs mt-0.5">
-          {["Select from our premium offerings","When would you like to visit?","Choose your preferred slot","Tell us about yourself","Finalize your appointment"][step]}
+        <p className="text-zinc-300 text-xs mt-0.5">
+          {["Select one or more services","When would you like to visit?","Choose your preferred slot","Tell us about yourself","Finalize your appointment"][step]}
         </p>
       </div>
 
       <div className="min-h-[260px]">
-        {/* Step 0 — Service */}
+        {/* Step 0 — Service (multi-select) */}
         {step === 0 && (
-          <div className="grid grid-cols-2 gap-2.5 max-h-[55vh] overflow-y-auto pr-0.5" style={{ scrollbarWidth: "none" }}>
+          <div>
+            {booking.services.length > 0 && <p className="text-xs mb-2" style={{ color: GOLD }}>{booking.services.length} service{booking.services.length > 1 ? "s" : ""} selected — ${booking.services.reduce((s, v) => s + v.price, 0)} total</p>}
+            <div className="grid grid-cols-2 gap-2.5 max-h-[55vh] overflow-y-auto pr-0.5" style={{ scrollbarWidth: "none" }}>
             {WEB_SERVICES.map(svc => {
-              const sel = booking.service?.name === svc.name;
+              const sel = booking.services.some(s => s.name === svc.name);
               return (
-                <button key={svc.name} onClick={() => setBooking(b => ({ ...b, service: svc, time: null }))}
+                <button key={svc.name} onClick={() => setBooking(b => ({ ...b, services: sel ? b.services.filter(s => s.name !== svc.name) : [...b.services, svc] }))}
                   className="text-left rounded-xl border overflow-hidden transition-all group"
                   style={{ background: "#0E0E0E", border: `1px solid ${sel ? GOLD : "#2A2A2A"}`, boxShadow: sel ? `0 0 0 1px ${GOLD_BORDER}` : "none" }}>
                   <div className="relative h-20 overflow-hidden bg-zinc-900">
@@ -186,6 +193,7 @@ function BookingModal({ onClose }: { onClose: () => void }) {
                 </button>
               );
             })}
+            </div>
           </div>
         )}
 
@@ -228,15 +236,15 @@ function BookingModal({ onClose }: { onClose: () => void }) {
                 return (
                   <button key={slot.time} onClick={() => { if (!slot.available) { setAttempted(slot.time); } else { setAttempted(null); setBooking(b => ({ ...b, time: slot.time })); } }}
                     className="py-2.5 px-2 rounded-lg text-xs font-semibold border transition-all"
-                    style={sel ? { background: GOLD, color: "#000", border: `1px solid ${GOLD}` } : slot.available ? { background: "#141414", color: "#D4D4D8", border: "1px solid #2A2A2A" } : { background: "#0A0A0A", color: "#3F3F46", border: "1px solid #1A1A1A" }}>
+                    style={sel ? { background: GOLD, color: "#000", border: `1px solid ${GOLD}` } : slot.available ? { background: "rgba(52,211,153,0.08)", color: "#86EFAC", border: "1px solid rgba(52,211,153,0.25)" } : { background: "rgba(248,113,113,0.06)", color: "#525252", border: "1px solid rgba(248,113,113,0.15)", textDecoration: "line-through" }}>
                     {slot.time}
                   </button>
                 );
               })}
             </div>
             <div className="flex gap-4 justify-center text-xs mb-3">
-              {[["#2A2A2A","#D4D4D8","Available"],["#D4AF37","#000","Selected"],["#1A1A1A","#3F3F46","Unavailable"]].map(([bg,c,l]) => (
-                <div key={l} className="flex items-center gap-1.5"><div className="w-3 h-3 rounded" style={{ background: bg }} /><span className="text-zinc-500">{l}</span></div>
+              {[["rgba(52,211,153,0.08)","#86EFAC","Available"],["#D4AF37","#000","Selected"],["rgba(248,113,113,0.06)","#525252","Unavailable"]].map(([bg,c,l]) => (
+                <div key={l} className="flex items-center gap-1.5"><div className="w-3 h-3 rounded" style={{ background: bg, border: l === "Available" ? "1px solid rgba(52,211,153,0.25)" : l === "Unavailable" ? "1px solid rgba(248,113,113,0.15)" : "none" }} /><span className="text-zinc-500">{l}</span></div>
               ))}
             </div>
             {attempted && (
@@ -258,19 +266,25 @@ function BookingModal({ onClose }: { onClose: () => void }) {
         {/* Step 3 — Details */}
         {step === 3 && (
           <div className="space-y-3.5">
-            {[
-              { label: "Full Name", field: "name" as const, icon: User, placeholder: "Your full name", type: "text" },
-              { label: "Mobile Number", field: "mobile" as const, icon: Phone, placeholder: "+1 (234) 567-890", type: "tel" },
-            ].map(({ label, field, icon: Icon, placeholder, type }) => (
-              <div key={field}>
-                <label className="block text-xs font-semibold uppercase tracking-wider text-zinc-500 mb-1.5">{label} <span style={{ color: GOLD }}>*</span></label>
-                <div className="relative">
-                  <Icon className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-600" />
-                  <input type={type} value={booking[field]} onChange={e => setBooking(b => ({ ...b, [field]: e.target.value }))} placeholder={placeholder}
-                    className="w-full bg-zinc-900 border border-zinc-700 focus:border-yellow-600 rounded-xl pl-9 pr-4 py-3 text-white text-sm placeholder:text-zinc-600 outline-none transition-colors" />
-                </div>
+            <div>
+              <label className="block text-xs font-semibold uppercase tracking-wider text-zinc-500 mb-1.5">Full Name <span style={{ color: GOLD }}>*</span></label>
+              <div className="relative">
+                <User className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-600" />
+                <input type="text" value={booking.name} onChange={e => setBooking(b => ({ ...b, name: e.target.value }))} placeholder="e.g. Kasun Perera"
+                  className="w-full bg-zinc-900 border border-zinc-700 focus:border-yellow-600 rounded-xl pl-9 pr-4 py-3 text-white text-sm placeholder:text-zinc-600 outline-none transition-colors" />
               </div>
-            ))}
+            </div>
+            <div>
+              <label className="block text-xs font-semibold uppercase tracking-wider text-zinc-500 mb-1.5">Mobile Number <span style={{ color: GOLD }}>*</span></label>
+              <div className="relative">
+                <Phone className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-600" />
+                <input type="tel" inputMode="numeric" value={booking.mobile} maxLength={10}
+                  onChange={e => { const v = e.target.value.replace(/\D/g, ""); if (v.length <= 10) setBooking(b => ({ ...b, mobile: v })); }}
+                  placeholder="0771234567"
+                  className="w-full bg-zinc-900 border border-zinc-700 focus:border-yellow-600 rounded-xl pl-9 pr-4 py-3 text-white text-sm placeholder:text-zinc-600 outline-none transition-colors" />
+              </div>
+              {booking.mobile.length > 0 && booking.mobile.length < 10 && <p className="text-xs mt-1 text-amber-400">Must be exactly 10 digits ({10 - booking.mobile.length} more)</p>}
+            </div>
             <div>
               <label className="block text-xs font-semibold uppercase tracking-wider text-zinc-500 mb-1.5">Notes <span className="text-zinc-700 normal-case font-normal">(optional)</span></label>
               <div className="relative">
@@ -282,11 +296,20 @@ function BookingModal({ onClose }: { onClose: () => void }) {
         )}
 
         {/* Step 4 — Confirm */}
-        {step === 4 && booking.service && (
+        {step === 4 && booking.services.length > 0 && (
           <div className="space-y-3">
             <div className="rounded-xl overflow-hidden" style={{ border: `1px solid ${GOLD_BORDER}` }}>
               <div className="px-4 py-2 text-xs font-semibold uppercase tracking-widest" style={{ color: GOLD, background: GOLD_FAINT }}>Appointment Summary</div>
-              {[["Service", booking.service.name],["Date", booking.date?.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric", year: "numeric" }) ?? ""],["Time", booking.time ?? ""],["Duration", booking.service.duration]].map(([l, v]) => (
+              <div className="px-4 py-2.5" style={{ borderTop: `1px solid ${BORDER}` }}>
+                <span className="text-zinc-500 text-sm">Services</span>
+                {booking.services.map(s => (
+                  <div key={s.name} className="flex justify-between text-sm mt-1">
+                    <span className="text-white font-semibold">{s.name}</span>
+                    <span className="text-zinc-400">{s.duration} · ${s.price}</span>
+                  </div>
+                ))}
+              </div>
+              {[["Date", booking.date?.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric", year: "numeric" }) ?? ""],["Time", booking.time ?? ""],["Total Duration", totalDurationLabel]].map(([l, v]) => (
                 <div key={l} className="flex justify-between items-center px-4 py-2.5" style={{ borderTop: `1px solid ${BORDER}` }}>
                   <span className="text-zinc-500 text-sm">{l}</span>
                   <span className="text-white text-sm font-semibold">{v}</span>
@@ -295,7 +318,7 @@ function BookingModal({ onClose }: { onClose: () => void }) {
             </div>
             <div className="rounded-xl overflow-hidden" style={{ border: `1px solid ${BORDER2}` }}>
               <div className="px-4 py-2 text-xs font-semibold uppercase tracking-widest text-zinc-500" style={{ background: "#141414" }}>Payment</div>
-              {[["Total Price", `$${booking.service.price}`],["Advance Now", `$${booking.service.advance}`],["Remaining at Salon", `$${booking.service.price - booking.service.advance}`]].map(([l, v], i) => (
+              {[["Total Price", `$${totalPrice}`],["Advance Now", `$${totalAdvance}`],["Remaining at Salon", `$${totalPrice - totalAdvance}`]].map(([l, v], i) => (
                 <div key={l} className="flex justify-between items-center px-4 py-2.5" style={{ borderTop: `1px solid ${BORDER}`, color: i === 1 ? GOLD : "#fff" }}>
                   <span className="text-zinc-500 text-sm">{l}</span>
                   <span className="text-sm font-bold font-mono" style={{ color: i === 1 ? GOLD : "#fff" }}>{v}</span>
@@ -307,7 +330,7 @@ function BookingModal({ onClose }: { onClose: () => void }) {
               style={{ background: GOLD, color: "#000" }}
               onMouseEnter={e => (e.currentTarget.style.background = GOLD_DIM)}
               onMouseLeave={e => (e.currentTarget.style.background = GOLD)}>
-              <CreditCard className="w-4 h-4" /> Pay ${booking.service.advance} &amp; Confirm
+              <CreditCard className="w-4 h-4" /> Pay ${totalAdvance} &amp; Confirm
             </button>
           </div>
         )}
@@ -383,25 +406,26 @@ function WebsiteMode({ onSwitchToAdmin }: { onSwitchToAdmin: () => void }) {
   return (
     <div className="min-h-screen bg-black text-white" style={{ fontFamily: "'DM Sans', sans-serif" }}>
       {/* Hero */}
-      <section className="relative min-h-screen flex flex-col items-center justify-center px-4 py-20 overflow-hidden">
+      <section className="relative flex flex-col items-center justify-center px-4 py-20 md:py-28 lg:py-36 overflow-hidden">
         <div className="absolute inset-0 opacity-10 pointer-events-none">
           <div className="absolute top-20 left-10 w-64 h-64 bg-yellow-600 rounded-full blur-3xl" />
           <div className="absolute bottom-20 right-10 w-96 h-96 bg-yellow-600 rounded-full blur-3xl" />
         </div>
-        <div className="relative z-10 text-center max-w-4xl mx-auto space-y-8">
-          <div className="flex justify-center">
-            <ImageWithFallback 
-              src="/src/app/images/salon_logo.webp" 
-              alt="Salon Lotus Infinity Logo" 
-              className="w-48 h-48 md:w-64 md:h-64 lg:w-80 lg:h-80 object-contain"
-            />
+      <div className="relative z-10 text-center max-w-4xl mx-auto space-y-3">
+        <div className="flex flex-col items-center" style={{ gap: 0 }}>
+          <ImageWithFallback 
+            src="/src/app/images/salon_logo.webp" 
+            alt="Salon Lotus Infinity Logo" 
+            className="w-52 h-52 md:w-64 md:h-64 lg:w-80 lg:h-80 object-contain"
+          />
+          <div className="space-y-1" style={{ marginTop: '-0.5rem' }}>
+            <h1 className="text-5xl md:text-7xl tracking-wider font-bold text-yellow-600 md:translate-x-3 lg:translate-x-4" style={{ fontFamily: "'Playfair Display', serif" }}>Salon Lotus Infinity</h1>
+            <div className="flex items-center justify-center gap-4 text-yellow-600 text-lg md:translate-x-3 lg:translate-x-4"><span>Hair</span><span>•</span><span>Nails</span><span>•</span><span>Beauty</span></div>
           </div>
-          <div className="space-y-4">
-            <div className="flex items-center justify-center gap-4 text-yellow-600 text-lg"><span>Hair</span><span>•</span><span>Nails</span><span>•</span><span>Beauty</span></div>
-          </div>
-          <p className="text-gray-300 text-lg max-w-2xl mx-auto leading-relaxed">Experience the epitome of luxury and elegance. Where beauty meets perfection, and every visit transforms you into your most radiant self.</p>
-          <button onClick={() => setBookingOpen(true)} className="px-12 py-4 rounded-xl font-bold text-lg transition-all" style={{ background: GOLD, color: "#000" }} onMouseEnter={e => (e.currentTarget.style.background = GOLD_DIM)} onMouseLeave={e => (e.currentTarget.style.background = GOLD)}>Book Appointment</button>
         </div>
+        <p className="text-gray-300 text-lg max-w-2xl mx-auto leading-relaxed">Experience the epitome of luxury and elegance. Where beauty meets perfection, and every visit transforms you into your most radiant self.</p>
+        <button onClick={() => setBookingOpen(true)} className="px-12 py-4 rounded-xl font-bold text-lg transition-all" style={{ background: GOLD, color: "#000" }} onMouseEnter={e => (e.currentTarget.style.background = GOLD_DIM)} onMouseLeave={e => (e.currentTarget.style.background = GOLD)}>Book Appointment</button>
+      </div>
       </section>
 
       {/* Services */}
@@ -414,11 +438,13 @@ function WebsiteMode({ onSwitchToAdmin }: { onSwitchToAdmin: () => void }) {
                 <div className="relative h-48 overflow-hidden bg-zinc-800">
                   <ImageWithFallback src={svc.img} alt={svc.name} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" />
                   <div className="absolute inset-3 bg-gradient-to-t  via-black/20 to-transparent" />
-                  <div className="absolute top-4 right-4"><div className="p-2 rounded-full" style={{ background: GOLD }}><Scissors className="w-4 h-4 text-black" /></div></div>
                 </div>
                 <div className="p-5">
                   <h3 className="text-lg font-semibold mb-1">{svc.name}</h3>
-                  <p style={{ color: GOLD }}>${svc.price}+</p>
+                    <div className="flex items-center justify-between">
+                      <p style={{ color: GOLD }}>${svc.price}+</p>
+                       <p style={{ background: GOLD, padding: "2px", borderRadius: "8px" }}>{svc.duration}</p>
+                 </div>
                 </div>
               </div>
             ))}
