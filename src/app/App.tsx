@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect, useMemo } from "react";
+import salonLogo from "./images/salon_logo.webp";
 import {
   Sparkles, Phone, MapPin, Clock, Star, Scissors, Award, Users, CheckCircle2,
   Calendar, CreditCard, MessageCircle, X, ChevronLeft, ChevronRight, AlertCircle,
@@ -391,7 +392,7 @@ function WebsiteMode({ onSwitchToAdmin }: { onSwitchToAdmin: () => void }) {
         <div className="relative z-10 text-center max-w-4xl mx-auto space-y-8">
           <div className="flex justify-center">
             <ImageWithFallback 
-              src="/src/app/images/salon_logo.webp" 
+              src={salonLogo} 
               alt="Salon Lotus Infinity Logo" 
               className="w-48 h-48 md:w-64 md:h-64 lg:w-80 lg:h-80 object-contain"
             />
